@@ -1,0 +1,58 @@
+#version 450
+
+layout (set = 0, binding = 0) readonly buffer PathData {
+  uint val[];
+} path;
+
+// layout (set = 1, binding = 0) readonly buffer ClipRects {
+//   vec4 rect[];
+// } clip_rects;
+
+layout (set = 1, binding = 0) readonly buffer Colors {
+  uint len;
+  vec4 colors[];
+} colors;
+
+layout (rgba8, set = 2, binding = 0) writeonly uniform image2D image_out;
+
+layout (push_constant) uniform Inputs {
+  ivec2 offset;
+  ivec2 dims;
+  uint buf_len;
+  // int slot_width;
+  // int slot_height;
+  // uint clip_ix;
+} inputs;
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+
+void main() {
+  vec2 p = vec2(inputs.offset);
+  vec2 dims = vec2(inputs.dims);
+
+  float w = dims.x;
+  float h = dims.y;
+
+  uvec2 rel_dst = gl_GlobalInvocationID.xy;
+  uvec2 rel_dst_local = gl_LocalInvocationID.xy;
+
+  if (rel_dst.x >= w
+      || rel_dst.y >= h) {
+    return;
+  }
+
+  float t = clamp(0.0, 1.0, float(rel_dst.x) / w);
+
+
+  uint src_ix = uint(round(float(inputs.buf_len) * t));
+  uint src = path.val[src_ix];
+
+  uvec2 screen_dst = rel_dst + uvec2(p);
+
+  vec4 color = colors.colors[src % colors.len];
+
+  ivec2 pixel = ivec2(screen_dst);
+
+  imageStore(image_out, pixel, color.rgba);
+}

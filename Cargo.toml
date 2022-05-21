@@ -1,0 +1,53 @@
+[package]
+name = "game-raving"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+# raving = { git = "https://github.com/chfi/raving" }
+raving = { path = "../vkengine" }
+
+smallvec = "1.8.0"
+nalgebra = "0.30"
+roaring = "0.9"
+
+sprs = "0.11"
+ndarray = { version = "0.15", features = ["rayon"] }
+
+crossbeam = "0.8"
+parking_lot = "0.11.1"
+rayon = "1.5"
+
+rhai = { version = "1.7", features = ["sync", "f32_float", "internals"] }
+bytemuck = { version = "1.7" }
+
+rand = "0.8.5"
+rand_distr = "0.4.3"
+
+bstr = "0.2"
+
+rustc-hash = "1.1"
+
+image = "0.24"
+
+# bevy_ecs = "0.7"
+
+winit = "0.25"
+
+ash = { version = "0.36", features = ["linked"] }
+gpu-allocator = { version = "0.17", features = ["vulkan"] }
+ash-window = "0.9.1"
+rspirv-reflect = "0.6"
+
+argh = "0.1"
+ctrlc = "3.2"
+anyhow = "1.0"
+
+log = "0.4"
+flexi_logger = { version = "0.18", features = ["async"] }
+
+[profile.dev]
+opt-level = 3

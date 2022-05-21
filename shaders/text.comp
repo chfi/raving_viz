@@ -1,0 +1,54 @@
+#version 450
+
+layout (set = 0, binding = 0) uniform texture2D font_img;
+layout (set = 0, binding = 1) uniform sampler u_sampler;
+
+layout (set = 1, binding = 0) buffer TextData {
+  uint len;
+  uint chars[];
+} text;
+
+layout (rgba8, set = 2, binding = 0) uniform image2D image_out;
+
+layout (push_constant) uniform Inputs {
+  int x;
+  int y;
+  int img_width;
+  int img_height;
+  vec4 color;
+} inputs;
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+void main() {
+  uint char_offset = gl_WorkGroupID.x;
+
+  if (char_offset >= text.len) {
+    return;
+  }
+
+  ivec2 local = ivec2(gl_LocalInvocationID.xy);
+
+  int x_offset = inputs.x + int(char_offset) * 8 + local.x;
+  int y_offset = inputs.y + local.y;
+
+  uint char = text.chars[char_offset] & 127;
+
+  ivec2 i_char_px = ivec2(char * 8 + local.x, local.y);
+
+  vec2 char_px = vec2(i_char_px) / vec2(1024.0, 8.0);
+
+  vec4 font = texture(sampler2D(font_img, u_sampler), char_px);
+
+  vec4 font_col = vec4(font.rgb, 1.0 - font.r);
+
+  if (font_col.a > 0.0 &&
+      x_offset <= inputs.img_width &&
+      y_offset <= inputs.img_height) {
+    ivec2 dst_px = ivec2(x_offset, y_offset);
+
+    vec4 out_col = inputs.color;
+
+    imageStore(image_out, dst_px, out_col);
+  }
+}
