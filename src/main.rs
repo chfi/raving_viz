@@ -2,7 +2,7 @@ use raving::compositor::label_space::LabelSpace;
 use raving::compositor::{Compositor, SublayerAllocMsg};
 use raving::script::console::frame::Resolvable;
 use raving::vk::{
-    DescSetIx, FenceIx, ImageIx, ImageViewIx, SemaphoreIx, VkEngine,
+    BufferIx, DescSetIx, FenceIx, ImageIx, ImageViewIx, SemaphoreIx, VkEngine,
     WindowResources,
 };
 
@@ -37,7 +37,7 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    // let args: Args = argh::from_env();
+    let args: Args = argh::from_env();
 
     let spec = "debug";
     let _logger = Logger::try_with_env_or_str(spec)?
@@ -74,7 +74,8 @@ fn main() -> Result<()> {
 
     let mut engine = VkEngine::new(&window)?;
 
-    /*
+    let (clear_queue_tx, clear_queue_rx) =
+        crossbeam::channel::unbounded::<Box<dyn std::any::Any + Send + Sync>>();
 
     let image = {
         use image::io::Reader as ImageReader;
@@ -102,14 +103,12 @@ fn main() -> Result<()> {
             Ok(img)
         })?;
 
-        let image_res = &engine.resources[image];
-
         let vk_img = engine.resources[image].image;
 
-        engine.submit_queue_fn(|device, cmd| {
+        let staging = engine.submit_queue_fn(|ctx, res, alloc, cmd| {
             VkEngine::transition_image(
                 cmd,
-                device,
+                ctx.device(),
                 vk_img,
                 vk::AccessFlags::empty(),
                 vk::PipelineStageFlags::TOP_OF_PIPE,
@@ -119,29 +118,42 @@ fn main() -> Result<()> {
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             );
 
-            let pixel_bytes = img_data.to_rgba8().enumerate_pixels().flat_map(
-                |(_, _, col)| {
+            let bytes = img_data.to_rgba8();
+            let pixel_bytes =
+                bytes.enumerate_pixels().flat_map(|(_, _, col)| {
                     let [r, g, b, a] = col.0;
                     [r, g, b, a].into_iter()
-                },
+                });
+
+            let staging = res[image].fill_from_pixels(
+                ctx.device(),
+                ctx,
+                alloc,
+                pixel_bytes,
+                4,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                cmd,
+            )?;
+
+            VkEngine::transition_image(
+                cmd,
+                ctx.device(),
+                vk_img,
+                vk::AccessFlags::TRANSFER_WRITE,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::AccessFlags::NONE,
+                vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             );
 
-            // let staging = img.fill_from_pixels(
-            //     device,
-            //     ctx,
-            //     alloc,
-            //     pixel_bytes,
-            //     4,
-            //     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            //     cmd,
-            // )?;
-
-            Ok(())
+            Ok(staging)
         })?;
 
-        img
+        clear_queue_tx.send(Box::new(staging))?;
+
+        image
     };
-    */
 
     let mut compositor = Compositor::init(
         &mut engine,
@@ -150,7 +162,7 @@ fn main() -> Result<()> {
         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
     )?;
 
-    game_raving::sublayers::add_sublayer_defs(&mut engine, &mut compositor)?;
+    raving_viz::sublayers::add_sublayer_defs(&mut engine, &mut compositor)?;
 
     {
         compositor.new_layer("main_layer", 0, true);
@@ -162,16 +174,35 @@ fn main() -> Result<()> {
             &[],
         ))?;
 
+        compositor.sublayer_alloc_tx.send(SublayerAllocMsg::new(
+            "main_layer",
+            "lines",
+            "line-rgb",
+            &[],
+        ))?;
+
         compositor.allocate_sublayers(&mut engine)?;
 
-        compositor.with_layer("main_layer", |layer| {
-            if let Some(sublayer) = layer.get_sublayer_mut("rects") {
-                let mut vert = [0u8; 4 * 8];
-                vert.clone_from_slice(bytemuck::cast_slice(&[
-                    100.0f32, 100.0, 200.0, 100.0, 1.0, 0.0, 0.0, 1.0,
-                ]));
+        let target = nalgebra::Vector2::new(0.5f32, 0.5);
 
-                sublayer.update_vertices_array(Some(vert))?;
+        let mut vertices = Vec::new();
+
+        raving_viz::vector_field::vector_field_vertices(
+            width as f32,
+            height as f32,
+            32,
+            32,
+            [1.0, 0.0, 0.0, 1.0],
+            &mut vertices,
+            |p| {
+                //
+                target - p
+            },
+        );
+
+        compositor.with_layer("main_layer", |layer| {
+            if let Some(sublayer) = layer.get_sublayer_mut("lines") {
+                sublayer.update_vertices_array(vertices)?;
             }
 
             Ok(())
@@ -183,8 +214,6 @@ fn main() -> Result<()> {
     // let mut sync_objs: Option<(FenceIx, SemaphoreIx)> = None;
     let mut sync_objs: Option<FenceIx> = None;
 
-    let mut clear_queue: Vec<Box<dyn std::any::Any>> = Vec::new();
-
     let should_exit = Arc::new(AtomicCell::new(false));
 
     {
@@ -194,15 +223,33 @@ fn main() -> Result<()> {
         })?;
     }
 
-    println!("Hello, world!");
-
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
 
         match event {
             Event::MainEventsCleared => {
-                for val in clear_queue.drain(..) {
-                    if val.type_id() == std::any::TypeId::of::<ImageViewIx>() {
+                if let Err(e) = compositor.allocate_sublayers(&mut engine) {
+                    log::error!("Compositor error: {:?}", e);
+                }
+
+                if let Err(e) = compositor.write_layers(&mut engine.resources) {
+                    log::error!("Compositor error: {:?}", e);
+                }
+
+                while let Ok(val) = clear_queue_rx.try_recv() {
+                    if val.type_id() == std::any::TypeId::of::<BufferIx>() {
+                        let ix = *val.downcast::<BufferIx>().unwrap();
+                        engine
+                            .resources
+                            .destroy_buffer(
+                                &engine.context,
+                                &mut engine.allocator,
+                                ix,
+                            )
+                            .unwrap();
+                    } else if val.type_id()
+                        == std::any::TypeId::of::<ImageViewIx>()
+                    {
                         let ix = *val.downcast::<ImageViewIx>().unwrap();
                         engine
                             .resources
@@ -265,8 +312,8 @@ fn main() -> Result<()> {
                         }
                     }
 
-                    // clear_queue.push(Box::new(view));
-                    // clear_queue.push(Box::new(img));
+                    clear_queue_tx.send(Box::new(view)).unwrap();
+                    clear_queue_tx.send(Box::new(img)).unwrap();
                 }
             }
             Event::RedrawEventsCleared => {}

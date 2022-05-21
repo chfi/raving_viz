@@ -704,38 +704,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "game-raving"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "argh",
- "ash",
- "ash-window",
- "bstr",
- "bytemuck",
- "crossbeam",
- "ctrlc",
- "flexi_logger",
- "gpu-allocator",
- "image 0.24.2",
- "log",
- "nalgebra",
- "ndarray",
- "parking_lot",
- "rand",
- "rand_distr",
- "raving",
- "rayon",
- "rhai",
- "roaring",
- "rspirv-reflect",
- "rustc-hash",
- "smallvec",
- "sprs",
- "winit",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1090,6 +1058,33 @@ dependencies = [
  "num-traits",
  "simba",
  "typenum",
+]
+
+[[package]]
+name = "nalgebra"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18a89248335f688e4bd994e6d030fd7e185eb41769b8c435395075425e100ac6"
+dependencies = [
+ "approx 0.5.1",
+ "matrixmultiply",
+ "num-complex 0.4.1",
+ "num-rational 0.4.0",
+ "num-traits",
+ "simba",
+ "typenum",
+]
+
+[[package]]
+name = "nalgebra-glm"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8e68654c920c582d34a4180c527ce2acf9ec8c695363681ff42acde46239d43"
+dependencies = [
+ "approx 0.5.1",
+ "nalgebra 0.31.0",
+ "num-traits",
+ "simba",
 ]
 
 [[package]]
@@ -1552,6 +1547,39 @@ dependencies = [
  "version_check",
  "winit",
  "zerocopy",
+]
+
+[[package]]
+name = "raving-viz"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argh",
+ "ash",
+ "ash-window",
+ "bstr",
+ "bytemuck",
+ "crossbeam",
+ "ctrlc",
+ "flexi_logger",
+ "gpu-allocator",
+ "image 0.24.2",
+ "log",
+ "nalgebra 0.30.1",
+ "nalgebra-glm",
+ "ndarray",
+ "parking_lot",
+ "rand",
+ "rand_distr",
+ "raving",
+ "rayon",
+ "rhai",
+ "roaring",
+ "rspirv-reflect",
+ "rustc-hash",
+ "smallvec",
+ "sprs",
+ "winit",
 ]
 
 [[package]]
