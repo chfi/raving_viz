@@ -75,6 +75,10 @@ fn main() -> Result<()> {
 
     let mut engine = VkEngine::new(&window)?;
 
+    let mut camera = raving_viz::mesh::Camera::new(&mut engine)?;
+
+    camera.write_uniform(&mut engine.resources);
+
     let (clear_queue_tx, clear_queue_rx) =
         crossbeam::channel::unbounded::<Box<dyn std::any::Any + Send + Sync>>();
 
@@ -186,7 +190,7 @@ fn main() -> Result<()> {
             "main_layer",
             "triangles",
             "tri-3d",
-            &[],
+            &[camera.desc_set],
         ))?;
 
         compositor.allocate_sublayers(&mut engine)?;
@@ -432,6 +436,25 @@ fn main() -> Result<()> {
                 }
             }
             Event::RedrawEventsCleared => {}
+            Event::DeviceEvent { event, .. } => {
+                if let winit::event::DeviceEvent::MouseMotion { delta } = event
+                {
+                    let rot_x = nalgebra_glm::rotate(
+                        &camera.mat,
+                        delta.0 as f32 / 100.0,
+                        &nalgebra_glm::vec3(0f32, 1.0, 0.0),
+                    );
+                    let rot = nalgebra_glm::rotate(
+                        &rot_x,
+                        delta.1 as f32 / 100.0,
+                        &nalgebra_glm::vec3(1f32, 0.0, 0.0),
+                    );
+
+                    camera.mat = rot;
+
+                    camera.write_uniform(&mut engine.resources);
+                }
+            }
             Event::WindowEvent { event, .. } => {
                 // viewer.handle_input(&console, &event);
 
@@ -464,44 +487,38 @@ fn main() -> Result<()> {
                         target = [x, y].into();
                         */
                     }
-                    /*
+
                     WindowEvent::KeyboardInput { input, .. } => {
                         if let Some(kc) = input.virtual_keycode {
                             use VirtualKeyCode as VK;
 
-                            if input.state == winit::event::ElementState::Pressed {
-                                if matches!(kc, VK::Space) {
-                                    if let Some(labels) = label_stacks.as_mut() {
-                                        let [width, _] = swapchain_dims.load();
-                                        let [slot_offset, slot_width] =
-                                            viewer.slot_x_offsets(width);
+                            if input.state
+                                == winit::event::ElementState::Pressed
+                            {
+                                if matches!(kc, VK::Left) {
+                                    let rot = nalgebra_glm::rotate(
+                                        &camera.mat,
+                                        0.2,
+                                        &nalgebra_glm::vec3(0f32, 1.0, 0.0),
+                                    );
 
-                                        labels
-                                            .update_layer(
-                                                &mut compositor,
-                                                &graph,
-                                                viewer.view.load(),
-                                                slot_offset,
-                                                slot_width,
-                                            )
-                                            .unwrap();
-                                    }
-                                }
-                                if matches!(kc, VK::Return) {
-                                    if let Err(e) =
-                                        console.handle_input(&db, &buffers, ConsoleInput::Submit)
-                                    {
-                                        log::error!("Console error: {:?}", e);
-                                    }
-                                } else if matches!(kc, VK::Back) {
-                                    console
-                                        .handle_input(&db, &buffers, ConsoleInput::Backspace)
-                                        .unwrap();
+                                    camera.mat = rot;
+
+                                    camera.write_uniform(&mut engine.resources);
+                                } else if matches!(kc, VK::Right) {
+                                    let rot = nalgebra_glm::rotate(
+                                        &camera.mat,
+                                        -0.2,
+                                        &nalgebra_glm::vec3(0f32, 1.0, 0.0),
+                                    );
+
+                                    camera.mat = rot;
+
+                                    camera.write_uniform(&mut engine.resources);
                                 }
                             }
                         }
                     }
-                    */
                     WindowEvent::CloseRequested => {
                         log::debug!("WindowEvent::CloseRequested");
                         *control_flow = winit::event_loop::ControlFlow::Exit;

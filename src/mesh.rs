@@ -1,8 +1,77 @@
+use std::collections::BTreeMap;
+
 use ash::vk;
 
 use nalgebra::Point3;
-use nalgebra_glm::Vec3;
-use raving::vk::{BufferIx, VkEngine};
+use nalgebra_glm::{mat4, vec3, vec4, Mat4, Vec3};
+use raving::vk::{
+    descriptor::DescriptorLayoutInfo, BufferIx, DescSetIx, GpuResources,
+    VkEngine,
+};
+use rspirv_reflect::DescriptorInfo;
+
+pub struct Camera {
+    pub mat: Mat4,
+
+    pub buffer: BufferIx,
+    pub desc_set: DescSetIx,
+}
+
+impl Camera {
+    pub fn new(engine: &mut VkEngine) -> anyhow::Result<Self> {
+        let mat = nalgebra_glm::look_at(
+            &vec3(0.0f32, 0.0, -2.0),
+            &vec3(0.0, 0.0, 0.0),
+            &vec3(0.0, 1.0, 0.0),
+        );
+
+        let (buffer, desc_set) =
+            engine.with_allocators(|ctx, res, alloc| {
+                let usage = vk::BufferUsageFlags::UNIFORM_BUFFER;
+
+                let buf = res.allocate_buffer(
+                    ctx,
+                    alloc,
+                    gpu_allocator::MemoryLocation::CpuToGpu,
+                    4,  // f32
+                    16, // 4x4 matrix
+                    usage,
+                    Some("camera uniform buffer"),
+                )?;
+
+                let buf = res.insert_buffer(buf);
+
+                let set = allocate_uniform_desc_set(res, buf)?;
+
+                let set = res.insert_desc_set(set);
+
+                Ok((buf, set))
+            })?;
+
+        let mut result = Self {
+            mat,
+            buffer,
+            desc_set,
+        };
+
+        Ok(result)
+    }
+
+    pub fn write_uniform(&self, res: &mut GpuResources) {
+        let buf = &mut res[self.buffer];
+
+        if let Some(slice) = buf.mapped_slice_mut() {
+            slice.clone_from_slice(bytemuck::cast_slice(self.mat.as_slice()));
+        }
+    }
+}
+
+/*
+pub struct Uniform {
+    buffer: BufferIx,
+    desc_set: DescSetIx,
+}
+*/
 
 pub fn index_buffer(
     engine: &mut VkEngine,
@@ -143,3 +212,46 @@ pub struct Halfedge {
 }
 
 */
+
+fn allocate_uniform_desc_set(
+    res: &mut GpuResources,
+    buffer: BufferIx,
+) -> anyhow::Result<vk::DescriptorSet> {
+    // TODO also do uniforms if/when i add them, or keep them in a
+    // separate set
+    let layout_info = {
+        let mut info = DescriptorLayoutInfo::default();
+
+        let binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build();
+
+        info.bindings.push(binding);
+        info
+    };
+
+    let set_info = {
+        let info = DescriptorInfo {
+            ty: rspirv_reflect::DescriptorType::UNIFORM_BUFFER,
+            binding_count: rspirv_reflect::BindingCount::One,
+            name: "camera".to_string(),
+        };
+
+        Some((0u32, info)).into_iter().collect::<BTreeMap<_, _>>()
+    };
+
+    res.allocate_desc_set_raw(&layout_info, &set_info, |res, builder| {
+        let buffer = &res[buffer];
+        let info = ash::vk::DescriptorBufferInfo::builder()
+            .buffer(buffer.buffer)
+            .offset(0)
+            .range(ash::vk::WHOLE_SIZE)
+            .build();
+        let buffer_info = [info];
+        builder.bind_buffer(0, &buffer_info);
+        Ok(())
+    })
+}
