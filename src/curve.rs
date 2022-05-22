@@ -6,37 +6,12 @@ use nalgebra_glm::Vec2;
 
 use palette::{FromColor, Hsl, IntoColor, Srgb};
 
-// points should be in the unit square
-pub fn dot_plot(
-    width: f32,
-    height: f32,
-    color: [f32; 4],
-    buf: &mut Vec<[u8; 40]>,
-    points: impl IntoIterator<Item = Vec2>,
-) {
-    buf.clear();
+// pub fn curve_vertices<F>(
+//     width: f32,
+//     height: f32,
+//     curve_start: (Vec2,
 
-    for p in points {
-        let mut vertex = [0u8; 40];
-
-        // let s0 = p * Vec2::new(1.0 / width, 1.0 / height);
-        // let dim = Vec2::new(width, height);
-        // let s0 = p * dim;
-        let s0 = Vec2::new(p.x * width, p.y * height);
-        let s1 = s0 + Vec2::new(0.0, -8.0);
-
-        let w0 = 7.0;
-        let w1 = 0.5;
-
-        vertex[0..12].clone_from_slice(bytemuck::cast_slice(&[s0.x, s0.y, w0]));
-        vertex[12..24]
-            .clone_from_slice(bytemuck::cast_slice(&[s1.x, s1.y, w1]));
-        vertex[24..40].clone_from_slice(bytemuck::cast_slice(&color));
-
-        buf.push(vertex);
-    }
-}
-
+/*
 pub fn vector_field_vertices<F>(
     width: f32,
     height: f32,
@@ -87,3 +62,4 @@ pub fn vector_field_vertices<F>(
         }
     }
 }
+*/

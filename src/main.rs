@@ -1,3 +1,4 @@
+use nalgebra_glm::Vec2;
 use raving::compositor::label_space::LabelSpace;
 use raving::compositor::{Compositor, SublayerAllocMsg};
 use raving::script::console::frame::Resolvable;
@@ -181,11 +182,61 @@ fn main() -> Result<()> {
             &[],
         ))?;
 
+        compositor.sublayer_alloc_tx.send(SublayerAllocMsg::new(
+            "main_layer",
+            "triangles",
+            "tri-3d",
+            &[],
+        ))?;
+
         compositor.allocate_sublayers(&mut engine)?;
 
-        let target = nalgebra::Vector2::new(0.5f32, 0.5);
+        let indices = raving_viz::mesh::index_buffer(
+            &mut engine,
+            &clear_queue_tx,
+            [0, 1, 2, 0, 3, 4, 5, 6, 7],
+            // 0..10,
+        )?;
 
-        let mut vertices = Vec::new();
+        compositor.with_layer("main_layer", |layer| {
+            if let Some(sublayer) = layer.get_sublayer_mut("triangles") {
+                // if let Some(sublayer) = layer.get_sublayer_mut("lines") {
+
+                let mut vertices = Vec::new();
+
+                let vx = |x: f32, y: f32, z: f32| {
+                    let mut v0 = [0u8; 40];
+                    v0[0..12]
+                        .clone_from_slice(bytemuck::cast_slice(&[x, y, z]));
+                    v0[12..24].clone_from_slice(bytemuck::cast_slice(&[
+                        1f32, 0.0, 0.0,
+                    ]));
+                    v0[24..40].clone_from_slice(bytemuck::cast_slice(&[
+                        1f32, 0.0, 0.0, 1.0,
+                    ]));
+                    v0
+                };
+
+                vertices.push(vx(0.0, 0.0, 0.0));
+                vertices.push(vx(0.5, 0.0, 0.0));
+                vertices.push(vx(0.0, 0.5, 0.0));
+
+                vertices.push(vx(-0.5, 0.0, 0.0));
+                vertices.push(vx(0.0, -0.5, 0.0));
+
+                vertices.push(vx(0.0, 0.0, 0.5));
+                vertices.push(vx(0.5, 0.0, 0.5));
+                vertices.push(vx(0.0, 0.5, 0.5));
+
+                sublayer.update_vertices_array(vertices)?;
+                sublayer.set_indices(Some(indices));
+            }
+
+            Ok(())
+        })?;
+
+        /*
+        let target = nalgebra::Vector2::new(0.5f32, 0.5);
 
         raving_viz::vector_field::vector_field_vertices(
             width as f32,
@@ -208,7 +259,9 @@ fn main() -> Result<()> {
 
             Ok(())
         })?;
+        */
     }
+
     // let mut main_layer = compositor.new_layer(name, depth, enabled)
 
     let mut recreate_swapchain = false;
@@ -224,8 +277,26 @@ fn main() -> Result<()> {
         })?;
     }
 
-    let mut target = nalgebra::Vector2::new(0.5f32, 0.5);
-    let mut vertices = Vec::new();
+    // let mut target = nalgebra::Vector2::new(0.5f32, 0.5);
+    let mut vertices: Vec<[u8; 40]> = Vec::new();
+
+    {
+        let x_dist = rand_distr::Normal::from_mean_cv(0.5, 0.3)?;
+        let y_dist = rand_distr::Normal::from_mean_cv(0.5, 0.3)?;
+
+        let points = x_dist
+            .sample_iter(rand::thread_rng())
+            .zip(y_dist.sample_iter(rand::thread_rng()))
+            .map(|(x, y)| Vec2::new(x, y));
+
+        raving_viz::vector_field::dot_plot(
+            width as f32,
+            height as f32,
+            [1.0, 0.0, 0.0, 1.0],
+            &mut vertices,
+            points.take(1000),
+        );
+    }
 
     let start = std::time::Instant::now();
 
@@ -289,12 +360,39 @@ fn main() -> Result<()> {
 
                         swapchain_dims.store(engine.swapchain_dimensions());
 
+                        /*
+                        {
+                            let [width, height] = swapchain_dims.load();
+
+                            let x_dist =
+                                rand_distr::Normal::from_mean_cv(0.5, 0.3)
+                                    .unwrap();
+                            let y_dist =
+                                rand_distr::Normal::from_mean_cv(0.5, 0.3)
+                                    .unwrap();
+
+                            let points = x_dist
+                                .sample_iter(rand::thread_rng())
+                                .zip(y_dist.sample_iter(rand::thread_rng()))
+                                .map(|(x, y)| Vec2::new(x, y));
+
+                            raving_viz::vector_field::dot_plot(
+                                width as f32,
+                                height as f32,
+                                [1.0, 0.0, 0.0, 1.0],
+                                &mut vertices,
+                                points.take(1000),
+                            );
+                        }
+                        */
+
                         recreate_swapchain = false;
                     }
                 }
 
                 let [width, height] = swapchain_dims.load();
 
+                /*
                 raving_viz::vector_field::vector_field_vertices(
                     width as f32,
                     height as f32,
@@ -305,7 +403,9 @@ fn main() -> Result<()> {
                     &mut vertices,
                     |p| target - p,
                 );
+                */
 
+                /*
                 compositor
                     .with_layer("main_layer", |layer| {
                         if let Some(sublayer) = layer.get_sublayer_mut("lines")
@@ -318,6 +418,7 @@ fn main() -> Result<()> {
                         Ok(())
                     })
                     .unwrap();
+                */
 
                 if let Ok((img, view)) = engine.draw_compositor(
                     &compositor,
@@ -371,11 +472,13 @@ fn main() -> Result<()> {
                         }
                     }
                     WindowEvent::CursorMoved { position, .. } => {
+                        /*
                         let [width, height] = swapchain_dims.load();
                         let x = position.x as f32 / width as f32;
                         let y = position.y as f32 / height as f32;
 
                         target = [x, y].into();
+                        */
                     }
                     /*
                     WindowEvent::KeyboardInput { input, .. } => {

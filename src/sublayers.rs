@@ -2,7 +2,8 @@ use crossbeam::atomic::AtomicCell;
 use parking_lot::RwLock;
 use raving::vk::context::VkContext;
 use raving::vk::{
-    BufferIx, DescSetIx, FramebufferIx, GpuResources, PipelineIx, RenderPassIx, ShaderIx, VkEngine,
+    BufferIx, DescSetIx, FramebufferIx, GpuResources, PipelineIx, RenderPassIx,
+    ShaderIx, VkEngine,
 };
 
 use raving::compositor::*;
@@ -25,7 +26,10 @@ use anyhow::{anyhow, bail, Result};
 
 use rhai::plugin::*;
 
-pub fn add_sublayer_defs(engine: &mut VkEngine, compositor: &mut Compositor) -> Result<()> {
+pub fn add_sublayer_defs(
+    engine: &mut VkEngine,
+    compositor: &mut Compositor,
+) -> Result<()> {
     engine.with_allocators(|ctx, res, _| {
         let clear_pass = res[compositor.clear_pass];
         let load_pass = res[compositor.load_pass];
@@ -45,9 +49,10 @@ pub fn tri_3d_sublayer(
     clear_pass: vk::RenderPass,
     load_pass: vk::RenderPass,
 ) -> Result<SublayerDef> {
-    let vert = res.load_shader("shaders/rect_window.vert.spv", vk::ShaderStageFlags::VERTEX)?;
+    let vert = res
+        .load_shader("shaders/tri_3d.vert.spv", vk::ShaderStageFlags::VERTEX)?;
     let frag = res.load_shader(
-        "shaders/rect_window.frag.spv",
+        "shaders/tri_3d.frag.spv",
         vk::ShaderStageFlags::FRAGMENT,
     )?;
 
@@ -59,7 +64,7 @@ pub fn tri_3d_sublayer(
     let vert_binding_desc = vk::VertexInputBindingDescription::builder()
         .binding(0)
         .stride(vertex_stride as u32)
-        .input_rate(vk::VertexInputRate::INSTANCE)
+        .input_rate(vk::VertexInputRate::VERTEX)
         .build();
 
     let pos_desc = vk::VertexInputAttributeDescription::builder()
@@ -117,7 +122,10 @@ pub fn rect_rgb_sublayer(
     clear_pass: vk::RenderPass,
     load_pass: vk::RenderPass,
 ) -> Result<SublayerDef> {
-    let vert = res.load_shader("shaders/rect_window.vert.spv", vk::ShaderStageFlags::VERTEX)?;
+    let vert = res.load_shader(
+        "shaders/rect_window.vert.spv",
+        vk::ShaderStageFlags::VERTEX,
+    )?;
     let frag = res.load_shader(
         "shaders/rect_window.frag.spv",
         vk::ShaderStageFlags::FRAGMENT,
@@ -187,8 +195,12 @@ pub fn line_rgb_sublayer(
     clear_pass: vk::RenderPass,
     load_pass: vk::RenderPass,
 ) -> Result<SublayerDef> {
-    let vert = res.load_shader("shaders/vector.vert.spv", vk::ShaderStageFlags::VERTEX)?;
-    let frag = res.load_shader("shaders/vector.frag.spv", vk::ShaderStageFlags::FRAGMENT)?;
+    let vert = res
+        .load_shader("shaders/vector.vert.spv", vk::ShaderStageFlags::VERTEX)?;
+    let frag = res.load_shader(
+        "shaders/vector.frag.spv",
+        vk::ShaderStageFlags::FRAGMENT,
+    )?;
 
     let vert = res.insert_shader(vert);
     let frag = res.insert_shader(frag);
