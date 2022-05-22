@@ -98,6 +98,20 @@ pub fn tri_3d_sublayer(
     let vertex_offset = 0;
     let vertex_stride = vertex_stride as usize;
 
+    let rasterizer_info = vk::PipelineRasterizationStateCreateInfo::builder()
+        .depth_clamp_enable(false)
+        .rasterizer_discard_enable(false)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .line_width(1.0)
+        .cull_mode(vk::CullModeFlags::BACK)
+        .front_face(vk::FrontFace::CLOCKWISE)
+        // .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+        .depth_bias_enable(false)
+        .depth_bias_constant_factor(0.0)
+        .depth_bias_clamp(0.0)
+        .depth_bias_slope_factor(0.0)
+        .build();
+
     SublayerDef::new::<([f32; 3], [f32; 3], [f32; 4]), _>(
         ctx,
         res,
@@ -112,6 +126,7 @@ pub fn tri_3d_sublayer(
         None,
         Some(1),
         vert_input_info,
+        Some(&rasterizer_info),
         None,
     )
 }
@@ -186,6 +201,7 @@ pub fn rect_rgb_sublayer(
         None,
         vert_input_info,
         None,
+        None,
     )
 }
 
@@ -258,6 +274,7 @@ pub fn line_rgb_sublayer(
         Some(6),
         None,
         vert_input_info,
+        None,
         None,
     )
 }

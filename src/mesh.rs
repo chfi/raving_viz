@@ -11,19 +11,63 @@ use raving::vk::{
 use rspirv_reflect::DescriptorInfo;
 
 pub struct Camera {
-    pub mat: Mat4,
+    eye: Vec3,
+
+    u: Vec3, // points right
+    v: Vec3, // points up
+    n: Vec3, // points back
 
     pub buffer: BufferIx,
     pub desc_set: DescSetIx,
 }
 
 impl Camera {
+    /*
+    pub fn move_fwd(&mut self, dt: f32, dist: f32) {
+        dbg!(self.n);
+        dbg!(self.eye);
+
+        // let fwd = nalgebra_glm::cross(&self.u, &self.v);
+        // let fwd = nalgebra_glm::cross(&self.n, &self.v);
+        let fwd = nalgebra_glm::cross(&self.u, &self.n);
+
+        self.eye += fwd * dist * dt;
+
+        // self.eye += self.n * dist * dt;
+        // nalgebra_glm::translate(m, v)
+        // self.eye.append_translation(shift)
+    }
+
+    pub fn move_right(&mut self, dt: f32, dist: f32) {
+        self.eye += self.u * dist * dt;
+    }
+
+    pub fn rotate_hor(&mut self, angle: f32) {
+        // let u = nalgebra_glm::rotate_vec3(&self.u, angle, &self.v);
+        // let n = nalgebra_glm::rotate_vec3(&self.n, angle, &self.v);
+        let v = nalgebra_glm::cross(&self.u, &self.n);
+        let u = nalgebra_glm::rotate_vec3(&self.u, angle, &v);
+        let n = nalgebra_glm::rotate_vec3(&self.n, angle, &v);
+        self.u = u;
+        self.n = n;
+    }
+
+    pub fn rotate_ver(&mut self, angle: f32) {
+        // let v = nalgebra_glm::rotate_vec3(&self.v, angle, &self.u);
+        // let n = nalgebra_glm::rotate_vec3(&self.n, angle, &self.u);
+        let u = nalgebra_glm::cross(&self.v, &self.n);
+        let v = nalgebra_glm::rotate_vec3(&self.v, angle, &u);
+        let n = nalgebra_glm::rotate_vec3(&self.n, angle, &u);
+        self.v = v;
+        self.n = n;
+    }
+    */
+
     pub fn new(engine: &mut VkEngine) -> anyhow::Result<Self> {
-        let mat = nalgebra_glm::look_at(
-            &vec3(0.0f32, 0.0, -2.0),
-            &vec3(0.0, 0.0, 0.0),
-            &vec3(0.0, 1.0, 0.0),
-        );
+        let eye = vec3(0f32, 0.7, -10.0);
+        let u = vec3(1f32, 0.0, 0.0);
+        let v = vec3(0f32, 1.0, 0.0);
+        let n = vec3(0f32, 0.0, -1.0);
 
         let (buffer, desc_set) =
             engine.with_allocators(|ctx, res, alloc| {
@@ -49,7 +93,11 @@ impl Camera {
             })?;
 
         let mut result = Self {
-            mat,
+            eye,
+            u,
+            v,
+            n,
+
             buffer,
             desc_set,
         };
@@ -57,11 +105,57 @@ impl Camera {
         Ok(result)
     }
 
-    pub fn write_uniform(&self, res: &mut GpuResources) {
+    pub fn write_uniform_fixed(
+        &self,
+        res: &mut GpuResources,
+        eye: Vec3,
+        tgt: Vec3,
+        dims: [f32; 2],
+    ) {
+        let mat = nalgebra_glm::look_at_rh(&eye, &tgt, &vec3(0f32, 1.0, 0.0));
+
+        let [width, height] = dims;
+        let proj =
+            nalgebra_glm::perspective_fov(1.4f32, width, height, 1.0, 1000.0);
+
+        let mat = proj * mat;
+
+        let buf = &mut res[self.buffer];
+        if let Some(slice) = buf.mapped_slice_mut() {
+            slice.clone_from_slice(bytemuck::cast_slice(mat.as_slice()));
+        }
+    }
+
+    pub fn write_uniform(&self, res: &mut GpuResources, dims: [f32; 2]) {
+        let [width, height] = dims;
         let buf = &mut res[self.buffer];
 
+        #[rustfmt::skip]
+        let translate = mat4(
+                 1.0, 0.0, 0.0, -self.eye.x,
+                 0.0, 1.0, 0.0, -self.eye.y,
+                 0.0, 0.0, 1.0, -self.eye.z,
+                 0.0, 0.0, 0.0,         1.0);
+
+        let u = self.u;
+        let v = self.v;
+        let n = self.n;
+
+        #[rustfmt::skip]
+        let rot_align = mat4(
+            u.x, u.y, u.z, 0.0,
+            v.x, v.y, v.z, 0.0,
+            n.x, n.y, n.z, 0.0,
+            0.0, 0.0, 0.0, 1.0);
+
+        let proj =
+            nalgebra_glm::perspective_fov(1.4, width, height, 1.0, 1000.0);
+
+        // let mat = proj * rot_align * translate;
+        let mat = proj * translate * rot_align;
+
         if let Some(slice) = buf.mapped_slice_mut() {
-            slice.clone_from_slice(bytemuck::cast_slice(self.mat.as_slice()));
+            slice.clone_from_slice(bytemuck::cast_slice(mat.as_slice()));
         }
     }
 }

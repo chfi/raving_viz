@@ -1,4 +1,4 @@
-use nalgebra_glm::Vec2;
+use nalgebra_glm::{vec3, Vec2};
 use raving::compositor::label_space::LabelSpace;
 use raving::compositor::{Compositor, SublayerAllocMsg};
 use raving::script::console::frame::Resolvable;
@@ -77,7 +77,7 @@ fn main() -> Result<()> {
 
     let mut camera = raving_viz::mesh::Camera::new(&mut engine)?;
 
-    camera.write_uniform(&mut engine.resources);
+    camera.write_uniform(&mut engine.resources, [width as f32, height as f32]);
 
     let (clear_queue_tx, clear_queue_rx) =
         crossbeam::channel::unbounded::<Box<dyn std::any::Any + Send + Sync>>();
@@ -287,12 +287,18 @@ fn main() -> Result<()> {
     }
 
     let start = std::time::Instant::now();
+    let mut last_frame_i = std::time::Instant::now();
+
+    let mut dt = 0.0;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
 
         match event {
             Event::MainEventsCleared => {
+                dt = last_frame_i.elapsed().as_secs_f32();
+                last_frame_i = std::time::Instant::now();
+
                 if let Err(e) = compositor.allocate_sublayers(&mut engine) {
                     log::error!("Compositor error: {:?}", e);
                 }
@@ -408,6 +414,18 @@ fn main() -> Result<()> {
                     .unwrap();
                 */
 
+                camera.write_uniform_fixed(
+                    &mut engine.resources,
+                    vec3(10.0, -4.0, 10.0),
+                    vec3(0.0, 0.5, 0.0),
+                    [width as f32, height as f32],
+                );
+
+                // camera.write_uniform(
+                //     &mut engine.resources,
+                //     [width as f32, height as f32],
+                // );
+
                 if let Ok((img, view)) = engine.draw_compositor(
                     &compositor,
                     [0.3, 0.3, 0.3],
@@ -439,20 +457,8 @@ fn main() -> Result<()> {
             Event::DeviceEvent { event, .. } => {
                 if let winit::event::DeviceEvent::MouseMotion { delta } = event
                 {
-                    let rot_x = nalgebra_glm::rotate(
-                        &camera.mat,
-                        delta.0 as f32 / 100.0,
-                        &nalgebra_glm::vec3(0f32, 1.0, 0.0),
-                    );
-                    let rot = nalgebra_glm::rotate(
-                        &rot_x,
-                        delta.1 as f32 / 100.0,
-                        &nalgebra_glm::vec3(1f32, 0.0, 0.0),
-                    );
-
-                    camera.mat = rot;
-
-                    camera.write_uniform(&mut engine.resources);
+                    // camera.rotate_hor(delta.0 as f32 / 500.0);
+                    // camera.rotate_ver(-delta.1 as f32 / 1000.0);
                 }
             }
             Event::WindowEvent { event, .. } => {
@@ -495,6 +501,18 @@ fn main() -> Result<()> {
                             if input.state
                                 == winit::event::ElementState::Pressed
                             {
+                                /*
+                                if matches!(kc, VK::Up) {
+                                    camera.move_fwd(dt, 10.1);
+                                } else if matches!(kc, VK::Down) {
+                                    camera.move_fwd(dt, -10.1);
+                                } else if matches!(kc, VK::Left) {
+                                    camera.move_right(dt, -1.1);
+                                } else if matches!(kc, VK::Right) {
+                                    camera.move_right(dt, 1.1);
+                                }
+                                */
+                                /*
                                 if matches!(kc, VK::Left) {
                                     let rot = nalgebra_glm::rotate(
                                         &camera.mat,
@@ -516,6 +534,7 @@ fn main() -> Result<()> {
 
                                     camera.write_uniform(&mut engine.resources);
                                 }
+                                */
                             }
                         }
                     }
