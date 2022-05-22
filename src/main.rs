@@ -192,6 +192,7 @@ fn main() -> Result<()> {
             height as f32,
             32,
             32,
+            0.0,
             [1.0, 0.0, 0.0, 1.0],
             &mut vertices,
             |p| {
@@ -222,6 +223,11 @@ fn main() -> Result<()> {
             exit.store(true);
         })?;
     }
+
+    let mut target = nalgebra::Vector2::new(0.5f32, 0.5);
+    let mut vertices = Vec::new();
+
+    let start = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
@@ -289,6 +295,30 @@ fn main() -> Result<()> {
 
                 let [width, height] = swapchain_dims.load();
 
+                raving_viz::vector_field::vector_field_vertices(
+                    width as f32,
+                    height as f32,
+                    32,
+                    32,
+                    start.elapsed().as_secs_f32(),
+                    [1.0, 0.0, 0.0, 1.0],
+                    &mut vertices,
+                    |p| target - p,
+                );
+
+                compositor
+                    .with_layer("main_layer", |layer| {
+                        if let Some(sublayer) = layer.get_sublayer_mut("lines")
+                        {
+                            sublayer.update_vertices_array(
+                                vertices.iter().copied(),
+                            )?;
+                        }
+
+                        Ok(())
+                    })
+                    .unwrap();
+
                 if let Ok((img, view)) = engine.draw_compositor(
                     &compositor,
                     [0.3, 0.3, 0.3],
@@ -341,7 +371,11 @@ fn main() -> Result<()> {
                         }
                     }
                     WindowEvent::CursorMoved { position, .. } => {
-                        // waragraph::input::set_mouse_pos(position.x, position.y);
+                        let [width, height] = swapchain_dims.load();
+                        let x = position.x as f32 / width as f32;
+                        let y = position.y as f32 / height as f32;
+
+                        target = [x, y].into();
                     }
                     /*
                     WindowEvent::KeyboardInput { input, .. } => {

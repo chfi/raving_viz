@@ -13,6 +13,7 @@ raving = { path = "../vkengine" }
 smallvec = "1.8.0"
 roaring = "0.9"
 
+palette = "0.6"
 
 nalgebra = "0.30"
 nalgebra-glm = "0.17"
