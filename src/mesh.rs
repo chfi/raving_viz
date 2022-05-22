@@ -54,6 +54,29 @@ pub fn index_buffer(
 pub fn cube(buf: &mut Vec<[u8; 40]>) {
     buf.clear();
 
+    let vx = |[x, y, z]: [f32; 3]| {
+        let mut v0 = [0u8; 40];
+        v0[0..12].clone_from_slice(bytemuck::cast_slice(&[x, y, z]));
+        v0[12..24].clone_from_slice(bytemuck::cast_slice(&[1f32, 0.0, 0.0]));
+        v0[24..40].clone_from_slice(bytemuck::cast_slice(&[x, y, z, 1.0]));
+        v0
+    };
+
+    buf.extend(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ]
+        .into_iter()
+        .map(vx),
+    );
+
     // fn vertex(x: f32, y: f32, rgb: [f32; 3]) -> [u8; 40] {
     //     let mut v = [0u8; 40];
 

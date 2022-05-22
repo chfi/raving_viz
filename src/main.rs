@@ -194,8 +194,14 @@ fn main() -> Result<()> {
         let indices = raving_viz::mesh::index_buffer(
             &mut engine,
             &clear_queue_tx,
-            [0, 1, 2, 0, 3, 4, 5, 6, 7],
-            // 0..10,
+            [
+                0, 1, 2, 3, 2, 1, // front
+                5, 4, 7, 6, 7, 4, // back
+                1, 5, 3, 7, 3, 5, // right
+                4, 0, 6, 2, 6, 0, // left
+                4, 5, 0, 1, 0, 5, // top
+                2, 3, 6, 7, 6, 3, // bottom
+            ], // 0..10,
         )?;
 
         compositor.with_layer("main_layer", |layer| {
@@ -204,29 +210,7 @@ fn main() -> Result<()> {
 
                 let mut vertices = Vec::new();
 
-                let vx = |x: f32, y: f32, z: f32| {
-                    let mut v0 = [0u8; 40];
-                    v0[0..12]
-                        .clone_from_slice(bytemuck::cast_slice(&[x, y, z]));
-                    v0[12..24].clone_from_slice(bytemuck::cast_slice(&[
-                        1f32, 0.0, 0.0,
-                    ]));
-                    v0[24..40].clone_from_slice(bytemuck::cast_slice(&[
-                        1f32, 0.0, 0.0, 1.0,
-                    ]));
-                    v0
-                };
-
-                vertices.push(vx(0.0, 0.0, 0.0));
-                vertices.push(vx(0.5, 0.0, 0.0));
-                vertices.push(vx(0.0, 0.5, 0.0));
-
-                vertices.push(vx(-0.5, 0.0, 0.0));
-                vertices.push(vx(0.0, -0.5, 0.0));
-
-                vertices.push(vx(0.0, 0.0, 0.5));
-                vertices.push(vx(0.5, 0.0, 0.5));
-                vertices.push(vx(0.0, 0.5, 0.5));
+                raving_viz::mesh::cube(&mut vertices);
 
                 sublayer.update_vertices_array(vertices)?;
                 sublayer.set_indices(Some(indices));
