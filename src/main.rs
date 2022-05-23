@@ -261,8 +261,6 @@ fn main() -> Result<()> {
     // let mut main_layer = compositor.new_layer(name, depth, enabled)
 
     let mut recreate_swapchain = false;
-    // let mut sync_objs: Option<(FenceIx, SemaphoreIx)> = None;
-    let mut sync_objs: Option<FenceIx> = None;
 
     let should_exit = Arc::new(AtomicCell::new(false));
 
@@ -273,7 +271,6 @@ fn main() -> Result<()> {
         })?;
     }
 
-    // let mut target = nalgebra::Vector2::new(0.5f32, 0.5);
     let mut vertices: Vec<[u8; 40]> = Vec::new();
 
     {
@@ -299,11 +296,17 @@ fn main() -> Result<()> {
 
     let mut dt = 0.0;
 
+    let mut frame_i = 0;
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
 
         match event {
             Event::MainEventsCleared => {
+                if frame_i % 1000 == 0 {
+                    // log::error!("
+                }
+
                 dt = last_frame_i.elapsed().as_secs_f32();
                 last_frame_i = std::time::Instant::now();
 
@@ -421,15 +424,11 @@ fn main() -> Result<()> {
                     height,
                 ) {
                     match engine.display_image(
-                        sync_objs,
                         img,
                         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                     ) {
-                        Ok(Some(objs)) => {
-                            sync_objs = Some(objs);
-                        }
-                        Ok(None) => {
-                            recreate_swapchain = true;
+                        Ok(_) => {
+                            frame_i += 1;
                         }
                         Err(e) => {
                             log::error!("display_image error: {:?}", e);
