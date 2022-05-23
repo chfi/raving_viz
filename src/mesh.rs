@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use ash::vk;
 
 use nalgebra::Point3;
-use nalgebra_glm::{mat4, vec3, vec4, Mat4, Vec3};
+use nalgebra_glm::{mat4, vec2, vec3, vec4, Mat4, Vec2, Vec3};
 use raving::vk::{
     descriptor::DescriptorLayoutInfo, BufferIx, DescSetIx, GpuResources,
     VkEngine,
@@ -166,6 +166,116 @@ pub struct Uniform {
     desc_set: DescSetIx,
 }
 */
+
+pub fn sampled_disc(
+    engine: &mut VkEngine,
+    clear_queue: &crossbeam::channel::Sender<
+        Box<dyn std::any::Any + Send + Sync>,
+    >,
+    buf: &mut Vec<[u8; 40]>,
+    count: usize,
+) -> anyhow::Result<(BufferIx, usize)> {
+    use rand::prelude::*;
+    use rand_distr::{Normal, StandardNormal};
+    // use rand_distr::
+
+    buf.clear();
+
+    let mut colors = Vec::new();
+
+    let rgba = |r, g, b| {
+        let r = r as f32 / 255.0;
+        let g = g as f32 / 255.0;
+        let b = b as f32 / 255.0;
+        [r, g, b, 1.0]
+    };
+
+    colors.push(rgba(0xff, 0xff, 0xff));
+    colors.push(rgba(0x1f, 0x77, 0xb4));
+    colors.push(rgba(0xff, 0x7f, 0x0e));
+    colors.push(rgba(0x2c, 0xa0, 0x2c));
+    colors.push(rgba(0xd6, 0x27, 0x28));
+    colors.push(rgba(0x94, 0x67, 0xbd));
+    colors.push(rgba(0x8c, 0x56, 0x4b));
+    colors.push(rgba(0xe3, 0x77, 0xc2));
+    colors.push(rgba(0x7f, 0x7f, 0x7f));
+    colors.push(rgba(0xbc, 0xbd, 0x22));
+    colors.push(rgba(0x17, 0xbe, 0xcf));
+
+    let mut get_color = {
+        let mut i = 0;
+        move || {
+            let color = colors[i % colors.len()];
+            i += 1;
+            color
+        }
+    };
+
+    let mut tri_indices: Vec<usize> = Vec::new();
+
+    // let mut distr = Normal::from_mean_cv(0.0, 0.3)?;
+
+    let mut gen_point = {
+        use delaunator::Point;
+
+        let mut rng = rand::thread_rng();
+        let distr = Normal::from_mean_cv(0.5, 0.5)?;
+
+        move || loop {
+            let x = distr.sample(&mut rng);
+            let y = distr.sample(&mut rng);
+
+            let v = vec2(x, y);
+
+            if v.norm() <= 1.0 {
+                return Point { x, y };
+            }
+        }
+    };
+
+    let mut rng = rand::thread_rng();
+
+    let mut tri_points: Vec<delaunator::Point> = Vec::new();
+    let mut points: Vec<Vec2> = Vec::new();
+
+    for i in 0..count {
+        let p = gen_point();
+        let v = vec2(p.x as f32, p.y as f32);
+        points.push(v);
+        // points.push(v + vec2(0.5, -0.5));
+        tri_points.push(p);
+    }
+
+    let mut vx = |x: f32, y: f32, z: f32| {
+        let mut v0 = [0u8; 40];
+        v0[0..12].clone_from_slice(bytemuck::cast_slice(&[x, y, z]));
+        v0[12..24].clone_from_slice(bytemuck::cast_slice(&[1f32, 0.0, 0.0]));
+
+        v0[24..40].clone_from_slice(bytemuck::cast_slice(&get_color()));
+        // v0[24..40].clone_from_slice(bytemuck::cast_slice(&[x, y, z, 1.0]));
+        v0
+    };
+
+    for point in points {
+        // let o = vec2(0.5f32, 0.5);
+        let p = vec2(point.x, point.y);
+        // let z = (o - p).norm();
+        let z = p.norm();
+
+        buf.push(vx(point.x, z, point.y));
+        // buf.push(vx(point.x, 1.0, point.y));
+    }
+
+    let result = delaunator::triangulate(&tri_points);
+
+    index_buffer(
+        engine,
+        clear_queue,
+        result.triangles.into_iter().map(|s| s as u32),
+        // result.triangles.into_iter().rev().map(|s| s as u32),
+        // tri_indices.into_iter().map(|s| s as u32),
+    )
+}
 
 pub fn index_buffer(
     engine: &mut VkEngine,

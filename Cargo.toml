@@ -7,8 +7,10 @@ edition = "2021"
 
 [dependencies]
 
-# raving = { git = "https://github.com/chfi/raving" }
-raving = { path = "../vkengine" }
+delaunator = "1.0"
+
+raving = { git = "https://github.com/chfi/raving" }
+# raving = { path = "../vkengine" }
 
 smallvec = "1.8.0"
 roaring = "0.9"

@@ -3,8 +3,8 @@ use raving::compositor::label_space::LabelSpace;
 use raving::compositor::{Compositor, SublayerAllocMsg};
 use raving::script::console::frame::Resolvable;
 use raving::vk::{
-    BufferIx, DescSetIx, FenceIx, ImageIx, ImageViewIx, SemaphoreIx, VkEngine,
-    WindowResources,
+    BufferIx, BufferRes, DescSetIx, FenceIx, ImageIx, ImageViewIx, SemaphoreIx,
+    VkEngine, WindowResources,
 };
 
 use ash::vk;
@@ -195,6 +195,15 @@ fn main() -> Result<()> {
 
         compositor.allocate_sublayers(&mut engine)?;
 
+        let mut vertices = Vec::new();
+
+        let indices = raving_viz::mesh::sampled_disc(
+            &mut engine,
+            &clear_queue_tx,
+            &mut vertices,
+            1000,
+        )?;
+        /*
         let indices = raving_viz::mesh::index_buffer(
             &mut engine,
             &clear_queue_tx,
@@ -207,14 +216,13 @@ fn main() -> Result<()> {
                 2, 3, 6, 7, 6, 3, // bottom
             ], // 0..10,
         )?;
+        */
 
         compositor.with_layer("main_layer", |layer| {
             if let Some(sublayer) = layer.get_sublayer_mut("triangles") {
                 // if let Some(sublayer) = layer.get_sublayer_mut("lines") {
 
-                let mut vertices = Vec::new();
-
-                raving_viz::mesh::cube(&mut vertices);
+                // raving_viz::mesh::cube(&mut vertices);
 
                 sublayer.update_vertices_array(vertices)?;
                 sublayer.set_indices(Some(indices));
@@ -307,37 +315,7 @@ fn main() -> Result<()> {
                     log::error!("Compositor error: {:?}", e);
                 }
 
-                while let Ok(val) = clear_queue_rx.try_recv() {
-                    if val.type_id() == std::any::TypeId::of::<BufferIx>() {
-                        let ix = *val.downcast::<BufferIx>().unwrap();
-                        engine
-                            .resources
-                            .destroy_buffer(
-                                &engine.context,
-                                &mut engine.allocator,
-                                ix,
-                            )
-                            .unwrap();
-                    } else if val.type_id()
-                        == std::any::TypeId::of::<ImageViewIx>()
-                    {
-                        let ix = *val.downcast::<ImageViewIx>().unwrap();
-                        engine
-                            .resources
-                            .destroy_image_view(&engine.context, ix);
-                    } else if val.type_id() == std::any::TypeId::of::<ImageIx>()
-                    {
-                        let ix = *val.downcast::<ImageIx>().unwrap();
-                        engine
-                            .resources
-                            .destroy_image(
-                                &engine.context,
-                                &mut engine.allocator,
-                                ix,
-                            )
-                            .unwrap();
-                    }
-                }
+                empty_clear_queue(&mut engine, &clear_queue_rx).unwrap();
 
                 if recreate_swapchain {
                     let size = window.inner_size();
@@ -414,12 +392,22 @@ fn main() -> Result<()> {
                     .unwrap();
                 */
 
-                camera.write_uniform_fixed(
-                    &mut engine.resources,
-                    vec3(10.0, -4.0, 10.0),
-                    vec3(0.0, 0.5, 0.0),
-                    [width as f32, height as f32],
-                );
+                {
+                    let t = start.elapsed().as_secs_f32();
+
+                    let r = 10.0;
+
+                    let x = t.cos() * r;
+                    let y = t.sin() * r;
+
+                    camera.write_uniform_fixed(
+                        &mut engine.resources,
+                        // vec3(10.0, -4.0, 10.0),
+                        vec3(x, 4.0, y),
+                        vec3(0.5, 0.5, 0.5),
+                        [width as f32, height as f32],
+                    );
+                }
 
                 // camera.write_uniform(
                 //     &mut engine.resources,
@@ -559,6 +547,8 @@ fn main() -> Result<()> {
                     engine.context.device().queue_wait_idle(queue).unwrap();
                 };
 
+                empty_clear_queue(&mut engine, &clear_queue_rx).unwrap();
+
                 let ctx = &engine.context;
                 let res = &mut engine.resources;
                 let alloc = &mut engine.allocator;
@@ -573,6 +563,43 @@ fn main() -> Result<()> {
             *control_flow = winit::event_loop::ControlFlow::Exit;
         }
     });
+
+    Ok(())
+}
+
+fn empty_clear_queue(
+    engine: &mut VkEngine,
+    clear_queue_rx: &crossbeam::channel::Receiver<
+        Box<dyn std::any::Any + Send + Sync>,
+    >,
+) -> Result<()> {
+    while let Ok(val) = clear_queue_rx.try_recv() {
+        if val.type_id() == std::any::TypeId::of::<BufferRes>() {
+            log::warn!("freeing buffer");
+            let buf = val.downcast::<BufferRes>().unwrap();
+            buf.cleanup(&engine.context, &mut engine.allocator)?;
+        } else if val.type_id() == std::any::TypeId::of::<BufferIx>() {
+            log::warn!("freeing buffer");
+            let ix = *val.downcast::<BufferIx>().unwrap();
+            engine.resources.destroy_buffer(
+                &engine.context,
+                &mut engine.allocator,
+                ix,
+            )?;
+        } else if val.type_id() == std::any::TypeId::of::<ImageViewIx>() {
+            // log::warn!("destroying image view");
+            let ix = *val.downcast::<ImageViewIx>().unwrap();
+            engine.resources.destroy_image_view(&engine.context, ix);
+        } else if val.type_id() == std::any::TypeId::of::<ImageIx>() {
+            // log::warn!("freeing image");
+            let ix = *val.downcast::<ImageIx>().unwrap();
+            engine.resources.destroy_image(
+                &engine.context,
+                &mut engine.allocator,
+                ix,
+            )?
+        }
+    }
 
     Ok(())
 }
