@@ -9,6 +9,7 @@ use raving::vk::{
     VkEngine,
 };
 use rspirv_reflect::DescriptorInfo;
+use rustc_hash::FxHashMap;
 
 pub struct Camera {
     eye: Vec3,
@@ -114,6 +115,8 @@ impl Camera {
     ) {
         let mat = nalgebra_glm::look_at_rh(&eye, &tgt, &vec3(0f32, 1.0, 0.0));
 
+        // let mat = mat.try_inverse().unwrap();
+
         let [width, height] = dims;
         let proj =
             nalgebra_glm::perspective_fov(1.4f32, width, height, 1.0, 1000.0);
@@ -213,13 +216,11 @@ pub fn sampled_disc(
 
     let mut tri_indices: Vec<usize> = Vec::new();
 
-    // let mut distr = Normal::from_mean_cv(0.0, 0.3)?;
-
     let mut gen_point = {
         use delaunator::Point;
 
         let mut rng = rand::thread_rng();
-        let distr = Normal::from_mean_cv(0.5, 0.5)?;
+        let distr = Normal::new(0.0, 0.5)?;
 
         move || loop {
             let x = distr.sample(&mut rng);
@@ -242,9 +243,10 @@ pub fn sampled_disc(
         let p = gen_point();
         let v = vec2(p.x as f32, p.y as f32);
         points.push(v);
-        // points.push(v + vec2(0.5, -0.5));
         tri_points.push(p);
     }
+
+    log::warn!("tri_points.len() = {}", tri_points.len());
 
     let mut vx = |x: f32, y: f32, z: f32| {
         let mut v0 = [0u8; 40];
@@ -252,7 +254,6 @@ pub fn sampled_disc(
         v0[12..24].clone_from_slice(bytemuck::cast_slice(&[1f32, 0.0, 0.0]));
 
         v0[24..40].clone_from_slice(bytemuck::cast_slice(&get_color()));
-        // v0[24..40].clone_from_slice(bytemuck::cast_slice(&[x, y, z, 1.0]));
         v0
     };
 
@@ -260,13 +261,16 @@ pub fn sampled_disc(
         // let o = vec2(0.5f32, 0.5);
         let p = vec2(point.x, point.y);
         // let z = (o - p).norm();
-        let z = p.norm();
+        // let z = p.norm();
+
+        let z = p.x * p.x + p.y * p.y;
 
         buf.push(vx(point.x, z, point.y));
         // buf.push(vx(point.x, 1.0, point.y));
     }
 
     let result = delaunator::triangulate(&tri_points);
+    log::warn!("result.triangles.len() = {}", result.triangles.len());
 
     index_buffer(
         engine,
@@ -360,21 +364,238 @@ pub fn cube(buf: &mut Vec<[u8; 40]>) {
 }
 
 /*
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Index(pub usize);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VertexId(pub usize);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EdgeId(pub usize);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FaceId(pub usize);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HalfedgeId(pub usize);
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Size(pub usize);
+impl HalfedgeId {
+    // `null` halfedges only exist during construction, hence related
+    // methods are private
+    fn is_null(&self) -> bool {
+        self.0 == std::usize::MAX
+    }
+    fn null() -> Self {
+        Self(std::usize::MAX)
+    }
+}
+*/
 
-//
+macro_rules! define_id {
+    ($name:ident) => {
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name(pub usize);
 
+        impl $name {
+            // `null` halfedges only exist during construction, hence related
+            // methods are private
+            fn is_null(&self) -> bool {
+                self.0 == std::usize::MAX
+            }
+            fn null() -> Self {
+                Self(std::usize::MAX)
+            }
+        }
+    };
+}
+
+define_id!(HalfedgeId);
+define_id!(VertexId);
+define_id!(EdgeId);
+define_id!(FaceId);
+
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct Vertex {
-    id: usize,
+    id: VertexId,
     pos: Vec3,
 
-    halfedge: HalfedgeRef,
-    // on_boundary: bool,
-    // degree: usize,
+    halfedge: HalfedgeId,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Edge {
+    id: EdgeId,
+    halfedge: HalfedgeId,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Face {
+    id: FaceId,
+    halfedge: HalfedgeId,
+
+    is_boundary: bool,
+}
+
+impl Face {
+    fn new(id: FaceId, is_boundary: bool) -> Self {
+        Self {
+            id,
+            halfedge: HalfedgeId::null(),
+            is_boundary,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Halfedge {
+    id: HalfedgeId,
+
+    twin: HalfedgeId,
+    next: HalfedgeId,
+
+    vertex: VertexId,
+    edge: EdgeId,
+    face: FaceId,
+}
+
+impl Halfedge {
+    fn new(id: HalfedgeId) -> Self {
+        Halfedge {
+            id,
+
+            twin: HalfedgeId::null(),
+            next: HalfedgeId::null(),
+
+            vertex: VertexId::null(),
+            edge: EdgeId::null(),
+            face: FaceId::null(),
+        }
+    }
+}
+
+pub struct HalfedgeMesh {
+    halfedges: Vec<Halfedge>,
+
+    vertices: Vec<Vertex>,
+    edges: Vec<Edge>,
+    faces: Vec<Face>,
+}
+
+impl HalfedgeMesh {
+    pub fn from_triangles(
+        points: impl IntoIterator<Item = Vec3>,
+        triangles: impl IntoIterator<Item = [usize; 3]>,
+    ) -> anyhow::Result<Self> {
+        let mut halfedges: Vec<Halfedge> = Vec::new();
+        let mut edges: Vec<Edge> = Vec::new();
+
+        let points = points.into_iter().collect::<Vec<_>>();
+        let triangles = triangles.into_iter().collect::<Vec<_>>();
+
+        let mut vertices = points
+            .iter()
+            .enumerate()
+            .map(|(ix, &pos)| Vertex {
+                id: VertexId(ix),
+                pos,
+                halfedge: HalfedgeId::null(),
+            })
+            .collect::<Vec<_>>();
+
+        let face_count = triangles.len();
+
+        let mut pair_to_halfedge: FxHashMap<(VertexId, VertexId), HalfedgeId> =
+            FxHashMap::default();
+
+        let mut faces: Vec<Face> = (0..face_count)
+            .map(|ix| {
+                let id = FaceId(ix);
+                Face {
+                    id,
+                    halfedge: HalfedgeId::null(),
+                    is_boundary: false,
+                }
+            })
+            .collect();
+
+        // let mut faces: Vec<Face> = Vec::new();
+
+        // let mut new_face = |is_boundary: bool| {
+        // };
+
+        for &tri in &triangles {
+            let mut face_halfedges: Vec<HalfedgeId> = Vec::new();
+
+            let f_id = FaceId(faces.len());
+            let mut face = Face::new(f_id, false);
+
+            let degree = tri.len();
+
+            for index in 0..degree {
+                let ix_a = VertexId(tri[index]);
+                let ix_b = VertexId(tri[(index + 1) % degree]);
+
+                let ab = (ix_a, ix_b);
+
+                // let he = new_halfedge();
+
+                let he_id = HalfedgeId(halfedges.len());
+
+                pair_to_halfedge.insert(ab, he_id);
+
+                let mut h_ab = Halfedge::new(he_id);
+
+                h_ab.face = f_id;
+                face.halfedge = he_id;
+
+                h_ab.vertex = ix_a;
+                vertices[ix_a.0].halfedge = he_id;
+
+                face_halfedges.push(he_id);
+
+                let ba = (ix_b, ix_a);
+
+                if let Some(h_ba_i) = pair_to_halfedge.get(&ba) {
+                    let mut h_ba = &mut halfedges[h_ba_i.0];
+
+                    h_ab.twin = h_ba.id;
+                    h_ba.twin = h_ab.id;
+
+                    let edge_id = EdgeId(edges.len());
+
+                    h_ab.edge = edge_id;
+                    h_ba.edge = edge_id;
+
+                    let edge = Edge {
+                        id: edge_id,
+                        halfedge: h_ab.id,
+                    };
+
+                    edges.push(edge);
+
+                    //
+                } else {
+                    // later, halfedges with null twins will be used
+                    // as boundaries
+                    h_ab.twin = HalfedgeId::null();
+                }
+
+                halfedges.push(h_ab);
+                // if
+            }
+
+            for i in 0..degree {
+                let j = (i + 1) % degree;
+
+                let he_i = face_halfedges[i];
+                let he_j = face_halfedges[j];
+
+                halfedges[he_i.0].next = he_j;
+            }
+
+            faces.push(face);
+        }
+
+        todo!();
+    }
+
+    pub fn vertex_data(&self, buf: &mut Vec<[u8; 40]>) {
+        todo!();
+    }
 }
 
 impl Vertex {
@@ -403,16 +624,22 @@ impl Vertex {
     }
 }
 
-pub struct Edge {
-    //
-}
+/*
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Index(pub usize);
 
-pub struct Face {
-    //
-}
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Size(pub usize);
 
-pub struct Halfedge {
-    //
+//
+
+pub struct Vertex {
+    id: usize,
+    pos: Vec3,
+
+    halfedge: HalfedgeRef,
+    // on_boundary: bool,
+    // degree: usize,
 }
 
 */

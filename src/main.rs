@@ -224,8 +224,10 @@ fn main() -> Result<()> {
 
                 // raving_viz::mesh::cube(&mut vertices);
 
-                sublayer.update_vertices_array(vertices)?;
-                sublayer.set_indices(Some(indices));
+                sublayer.draw_data_mut().try_for_each(|data| {
+                    data.set_indices(Some(indices));
+                    data.update_vertices_array(vertices.iter().copied())
+                })?;
             }
 
             Ok(())
@@ -406,8 +408,9 @@ fn main() -> Result<()> {
                     camera.write_uniform_fixed(
                         &mut engine.resources,
                         // vec3(10.0, -4.0, 10.0),
-                        vec3(x, 4.0, y),
-                        vec3(0.5, 0.5, 0.5),
+                        vec3(x, 3.0, y),
+                        vec3(0.0, 0.5, 0.0),
+                        // vec3(0.5, 0.5, 0.5),
                         [width as f32, height as f32],
                     );
                 }
