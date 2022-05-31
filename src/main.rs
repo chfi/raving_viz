@@ -32,9 +32,9 @@ use std::path::PathBuf;
 #[derive(FromArgs)]
 /// Viewer arguments.
 struct Args {
-    /// image path to display,
-    #[argh(positional)]
-    pub img_path: PathBuf,
+    // /// image path to display,
+    // #[argh(positional)]
+    // pub img_path: PathBuf,
 }
 
 fn main() -> Result<()> {
@@ -82,6 +82,7 @@ fn main() -> Result<()> {
     let (clear_queue_tx, clear_queue_rx) =
         crossbeam::channel::unbounded::<Box<dyn std::any::Any + Send + Sync>>();
 
+    /*
     let image = {
         use image::io::Reader as ImageReader;
         let img = ImageReader::open(&args.img_path)?;
@@ -159,6 +160,7 @@ fn main() -> Result<()> {
 
         image
     };
+    */
 
     let mut compositor = Compositor::init(
         &mut engine,

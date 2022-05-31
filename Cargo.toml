@@ -9,6 +9,9 @@ edition = "2021"
 
 delaunator = "1.0"
 
+# sdl2 = { version = "0.35", features = ["mixer"] }
+cpal = "0.13"
+
 raving = { git = "https://github.com/chfi/raving" }
 # raving = { path = "../vkengine" }
 
